@@ -1,0 +1,45 @@
+name: Tune
+on:
+  schedule:
+    - cron: '0 * * * *'
+  workflow_dispatch:
+
+jobs:
+  tune:
+    name: Tune
+    runs-on: ubuntu-latest
+    steps:          
+      - name: Install python dependencies
+        run: |
+          pip install requests
+
+      - name: Checkout master branch
+        uses: actions/checkout@v4
+
+      - name: Get cache
+        run: |
+          CACHE=$(gh release view cache --json body --jq .body)
+          echo "::add-mask::$CACHE"
+          echo "CACHE=$CACHE" >> "$GITHUB_ENV"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}         
+          
+      - name: Get configuration
+        run: |
+          JSON=$(gh release view configuration --json body --jq .body | base64 -w 0)
+          echo "::add-mask::$JSON"
+          echo "JSON=$JSON" >> "$GITHUB_ENV"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Run tuner
+        run: |
+          CACHE=$(python tuner.py)
+          echo "::add-mask::$CACHE"
+          echo "CACHE=$CACHE" >> "$GITHUB_ENV"
+
+      - name: Update cache file
+        run: |
+          gh release edit cache --notes "$CACHE"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}        
