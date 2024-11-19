@@ -37,9 +37,15 @@ jobs:
           CACHE=$(python tuner.py)
           echo "::add-mask::$CACHE"
           echo "CACHE=$CACHE" >> "$GITHUB_ENV"
-
-      - name: Update cache file
+  
+      - name: Delete current release
         run: |
-          gh release edit cache --notes "$CACHE"
+          gh release delete cache --yes
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}        
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create a new release
+        run: |
+          gh release create cache --notes "$CACHE"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
