@@ -26,7 +26,7 @@ jobs:
           
       - name: Get configuration
         run: |
-          JSON=$(gh release view configuration --json body --jq .body | base64 -w 0)
+          JSON=$(gh release view configuration --json body --jq .body | sed 's/```json\|```//g' | base64 -w 0)
           echo "::add-mask::$JSON"
           echo "JSON=$JSON" >> "$GITHUB_ENV"
         env:
