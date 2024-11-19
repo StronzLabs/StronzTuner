@@ -8,12 +8,12 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from urllib.parse import urlparse
 
 # Set variable "cache" as the environment variable or default value
-cache = os.getenv('CACHE')
+cache = os.getenv("CACHE")
 assert cache is not None, "CACHE environment variable is not set"
 cache = base64.b64decode(cache).decode().strip().split("|")
 
 # Set variable "json" as the environment variable or default value
-json_data = os.getenv('JSON')
+json_data = os.getenv("JSON")
 assert json_data is not None, "JSON environment variable is not set"
 
 json_data = base64.b64decode(json_data).decode().strip()
@@ -22,8 +22,7 @@ json_data = json.loads(json_data)
 lookup_service = json_data.get("lookup_service")
 
 # Fetch the list of TLDs
-tlds_response = requests.get(
-    "https://data.iana.org/TLD/tlds-alpha-by-domain.txt")
+tlds_response = requests.get("https://data.iana.org/TLD/tlds-alpha-by-domain.txt")
 assert tlds_response.status_code == 200, "Failed to fetch TLDs"
 
 tlds = tlds_response.text.splitlines()[1:]  # Skip the first line
@@ -32,7 +31,8 @@ tlds = tlds_response.text.splitlines()[1:]  # Skip the first line
 def check_domain_cache(domain, tld, validator):
     try:
         response = requests.get(
-            f"https://{domain}.{tld}", timeout=5, allow_redirects=True)
+            f"https://{domain}.{tld}", timeout=5, allow_redirects=True
+        )
         if re.search(re.escape(validator), response.text):
             tld = urlparse(response.url).hostname.split(".")[-1].upper()
             return tld
@@ -50,28 +50,33 @@ def validate_domain(url, validator):
         pass
     return False
 
+
 def extract_from_fastpath(fast_path, domain) -> set[str]:
     try:
         response = requests.get(fast_path, timeout=5, allow_redirects=True)
-        domains = set(re.findall(rf'\b{domain}\.[a-zA-Z]+', response.text))
+        domains = set(re.findall(rf"\b{domain}\.[a-zA-Z]+", response.text))
         return [domain.split(".")[-1].upper() for domain in domains]
     except requests.exceptions.RequestException:
         pass
 
     return set()
 
+
 def extract_from_lookup(domain) -> set[str]:
     global lookup_service
 
     try:
-        response = requests.get(f"{lookup_service}/{domain}", timeout=5, allow_redirects=False)
+        response = requests.get(
+            f"{lookup_service}/{domain}", timeout=5, allow_redirects=False
+        )
         domains = response.text.strip().split("\n")
         return [domain.split(".")[-1].upper() for domain in domains]
     except requests.exceptions.RequestException:
         pass
 
     return set()
-    
+
+
 def find_domain(i, site, cache_tld):
     domain = site["domain"]
     validator = site["validator"]
@@ -86,7 +91,7 @@ def find_domain(i, site, cache_tld):
     # Check the cache first
     if cache_tld:
         tld = check_domain_cache(domain, cache_tld, validator)
-        
+
         if tld:
             print(f"Site #{i+1} found in cache", file=sys.stderr)
             return tld
@@ -98,7 +103,7 @@ def find_domain(i, site, cache_tld):
             if validate_domain(f"https://{domain}.{tld}", validator):
                 print(f"Site #{i+1} found in fastpath", file=sys.stderr)
                 return tld
-            
+
     print(f"Site #{i+1} not found in fastpath", file=sys.stderr)
 
     for tld in extract_from_lookup(domain):
@@ -106,7 +111,7 @@ def find_domain(i, site, cache_tld):
             print(f"Site #{i+1} found in lookup", file=sys.stderr)
             return tld
 
-    print(f"Site #{i+1} not found in lookup", file=sys.stderr)        
+    print(f"Site #{i+1} not found in lookup", file=sys.stderr)
 
     # Run the TLD checks in parallel
     with ThreadPoolExecutor(max_workers=100) as executor:
@@ -144,7 +149,9 @@ def main():
 
     if len(cache) != len(sites):
         print(
-            f"Cache length does not match sites length. Cache len:{len(cache)} != Sites len:{len(sites)}. Skipping it", file=sys.stderr)
+            f"Cache length does not match sites length. Cache len:{len(cache)} != Sites len:{len(sites)}. Skipping it",
+            file=sys.stderr,
+        )
         cache = [None] * len(sites)
 
     out = find_domains(sites, cache)
