@@ -15,7 +15,11 @@ cache = base64.b64decode(cache).decode().strip().split("|")
 # Set variable "json" as the environment variable or default value
 json_data = os.getenv('JSON')
 assert json_data is not None, "JSON environment variable is not set"
+
 json_data = base64.b64decode(json_data).decode().strip()
+json_data = json.loads(json_data)
+
+lookup_service = json_data.get("lookup_service")
 
 # Fetch the list of TLDs
 tlds_response = requests.get(
@@ -55,6 +59,18 @@ def extract_from_fastpath(fast_path, domain) -> set[str]:
         pass
 
     return set()
+
+def extract_from_lookup(domain) -> set[str]:
+    global lookup_service
+
+    try:
+        response = requests.get(f"{lookup_service}/{domain}", timeout=5, allow_redirects=False)
+        domains = response.text.strip().split("\n")
+        return [domain.split(".")[-1].upper() for domain in domains]
+    except requests.exceptions.RequestException:
+        pass
+
+    return set()
     
 def find_domain(i, site, cache_tld):
     domain = site["domain"]
@@ -78,14 +94,19 @@ def find_domain(i, site, cache_tld):
             print(f"Site #{i+1} not found in cache", file=sys.stderr)
 
     if fast_path := site.get("fast_path"):
-        tlds_fastpath = extract_from_fastpath(fast_path, domain)
-
-        for tld in tlds_fastpath:
+        for tld in extract_from_fastpath(fast_path, domain):
             if validate_domain(f"https://{domain}.{tld}", validator):
                 print(f"Site #{i+1} found in fastpath", file=sys.stderr)
                 return tld
             
-    print(f"Site #{i+1} not found in fastpath", file=sys.stderr)        
+    print(f"Site #{i+1} not found in fastpath", file=sys.stderr)
+
+    for tld in extract_from_lookup(domain):
+        if validate_domain(f"https://{domain}.{tld}", validator):
+            print(f"Site #{i+1} found in lookup", file=sys.stderr)
+            return tld
+
+    print(f"Site #{i+1} not found in lookup", file=sys.stderr)        
 
     # Run the TLD checks in parallel
     with ThreadPoolExecutor(max_workers=100) as executor:
@@ -119,7 +140,7 @@ def find_domains(sites, cache):
 def main():
     global cache
 
-    sites = json.loads(json_data)["sites"]
+    sites = json_data["sites"]
 
     if len(cache) != len(sites):
         print(
