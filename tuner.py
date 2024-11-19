@@ -46,7 +46,16 @@ def validate_domain(url, validator):
         pass
     return False
 
+def extract_from_fastpath(fast_path, domain) -> set[str]:
+    try:
+        response = requests.get(fast_path, timeout=5, allow_redirects=True)
+        domains = set(re.findall(rf'\b{domain}\.[a-zA-Z]+', response.text))
+        return [domain.split(".")[-1].upper() for domain in domains]
+    except requests.exceptions.RequestException:
+        pass
 
+    return set()
+    
 def find_domain(i, site, cache_tld):
     domain = site["domain"]
     validator = site["validator"]
@@ -61,11 +70,22 @@ def find_domain(i, site, cache_tld):
     # Check the cache first
     if cache_tld:
         tld = check_domain_cache(domain, cache_tld, validator)
+        
         if tld:
-            print(f"site #{i+1} found in cache", file=sys.stderr)
+            print(f"Site #{i+1} found in cache", file=sys.stderr)
             return tld
         else:
-            print(f"site #{i+1} not found in cache", file=sys.stderr)
+            print(f"Site #{i+1} not found in cache", file=sys.stderr)
+
+    if fast_path := site.get("fast_path"):
+        tlds_fastpath = extract_from_fastpath(fast_path, domain)
+
+        for tld in tlds_fastpath:
+            if validate_domain(f"https://{domain}.{tld}", validator):
+                print(f"Site #{i+1} found in fastpath", file=sys.stderr)
+                return tld
+            
+    print(f"Site #{i+1} not found in fastpath", file=sys.stderr)        
 
     # Run the TLD checks in parallel
     with ThreadPoolExecutor(max_workers=100) as executor:
