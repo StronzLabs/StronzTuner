@@ -12,12 +12,19 @@ domaint_fmt = "https://{domain}.{tld}"
 
 def validate_domain(url, validator):
     try:
+        new_url = None
         response = requests.get(url, timeout=5, allow_redirects=False)
+
+        if response.status_code == 301:
+            new_url = response.headers["Location"]
+            response = requests.get(new_url, timeout=5, allow_redirects=False)
+
         if re.search(re.escape(validator), response.text):
-            return True
+            return True, new_url
+
     except requests.exceptions.RequestException:
         pass
-    return False
+    return False, None
 
 
 def extract_from_fastpath(fast_path, domain) -> set[str]:
@@ -55,9 +62,14 @@ def verify_tlds(domain, tlds, validator, scope, site_id):
             futures += [executor.submit(validate_domain, test_domain, validator)]
 
             for future in as_completed(futures):
-                if future.result() == True:
+                if (res := future.result())[0] == True:
                     print(f"Site #{site_id+1} found in {scope}", file=sys.stderr)
+
                     executor.shutdown(wait=False, cancel_futures=True)
+
+                    if res[1] != None:
+                        return res[1].split(".")[-1].upper()
+
                     return tld
 
         print(f"Site #{site_id+1} not found in {scope}", file=sys.stderr)
