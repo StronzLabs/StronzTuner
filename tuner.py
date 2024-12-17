@@ -68,8 +68,11 @@ def verify_tlds(domain, tlds, validator, scope, site_id):
                     executor.shutdown(wait=False, cancel_futures=True)
 
                     if res[1] != None:
-                        return res[1].split(".")[-1].upper()
-
+                        match = re.search(r"\.(.*)\/", res[1])
+                        
+                        if match:
+                            return match.group(1).upper()
+                    
                     return tld
 
         print(f"Site #{site_id+1} not found in {scope}", file=sys.stderr)
